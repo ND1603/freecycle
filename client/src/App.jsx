@@ -10,6 +10,7 @@ import Messages from './components/Messages';
 import ItemCard from './components/ItemCard';
 import ItemDetailModal from './components/ItemDetailModal';
 import './App.css';
+import ProfileModal from './components/ProfileModal';
 
 function App() {
   const { user, checking, logout } = useAuth();
@@ -23,6 +24,8 @@ function App() {
 
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [authOpen, setAuthOpen] = useState(false);
   const [postOpen, setPostOpen] = useState(false);
@@ -143,10 +146,22 @@ function App() {
                 💬 Messages
                 {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
               </button>
-              <span className="user-chip">
-                Signed in as <strong>{user.name}</strong>
-                <button className="icon-btn" onClick={logout} aria-label="Sign out" title="Sign out">↪</button>
-              </span>
+              <span
+  className="user-chip"
+  onClick={() => setProfileOpen(true)}
+  style={{ cursor: 'pointer' }}
+  title="Click to view profile & stats"
+>
+  👤 <strong>{user.name}</strong>
+  <button
+    className="icon-btn"
+    onClick={(e) => { e.stopPropagation(); logout(); }}
+    aria-label="Sign out"
+    title="Sign out"
+  >
+    ↪
+  </button>
+</span>
             </>
           )}
           {!checking && !user && (
@@ -246,6 +261,8 @@ function App() {
           onDelete={handleDeleteItem}
         />
       )}
+
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
 
       {postOpen && <PostItemModal onClose={() => setPostOpen(false)} onItemAdded={handleItemAdded} />}
       {claimItem && <ClaimModal item={claimItem} onClose={() => setClaimItem(null)} onClaimed={handleClaimed} />}

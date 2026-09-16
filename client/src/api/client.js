@@ -76,4 +76,15 @@ export const api = {
 
   reopenItem: (id) => request(`/api/items/${id}/reopen`, { method: 'PATCH' }),
 
+    updateProfile: (name) =>
+    request('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({ name }) }),
+
+  changePassword: (currentPassword, newPassword) =>
+    request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  getUserStats: () => request('/api/auth/stats'),
+
 };
