@@ -22,23 +22,25 @@ pickup. Built with React (client) + Express (server) + PostgreSQL (Neon).
 ```
 freecycle/
 ├── server/                  Express API
-│   ├── server.js              entry point — wires up routes
-│   ├── db.js                  Postgres connection pool
+│   ├── app.js                  the actual Express app (routes, middleware)
+│   ├── server.js               local dev only — imports app.js and listens
+│   ├── api/
+│   │   └── [...path].js        Vercel's entry point — hands every
+│   │                            request to the same Express app above
+│   ├── db.js                   Postgres connection pool
 │   ├── routes/
-│   │   ├── auth.js              signup, login, logout, session check
-│   │   ├── items.js             list + create items
-│   │   ├── claims.js            request an item (creates a conversation too)
-│   │   ├── conversations.js     list conversations, read/send messages
-│   │   └── upload.js            image upload (multer, saves to /uploads)
+│   │   ├── auth.js               signup, login, logout, session check
+│   │   ├── items.js              list + create items
+│   │   ├── claims.js             request an item (creates a conversation too)
+│   │   ├── conversations.js      list conversations, read/send messages
+│   │   └── upload.js             image upload (Vercel Blob storage)
 │   ├── middleware/
-│   │   └── requireAuth.js       checks the login cookie
+│   │   └── requireAuth.js        checks the login cookie
 │   ├── lib/
-│   │   └── auth.js              password hashing, JWT, cookies
-│   ├── uploads/                 uploaded item photos (gitignored — only
-│   │                             .gitkeep is tracked)
+│   │   └── auth.js               password hashing, JWT, cookies
 │   ├── db/
 │   │   ├── schema.sql
-│   │   └── seed.sql             optional sample data
+│   │   └── seed.sql              optional sample data
 │   └── .env.example
 └── client/                  React frontend (Vite)
     ├── src/
@@ -77,6 +79,9 @@ In `server/.env`, fill in:
 - `DATABASE_URL` — your Neon connection string
 - `JWT_SECRET` — any long random string (`openssl rand -base64 32`)
 - `CLIENT_URL` — leave as `http://localhost:5173` for local dev
+- `BLOB_READ_WRITE_TOKEN` — from a Blob store in your Vercel dashboard's
+  Storage tab (needed even for local dev, since uploads go straight to
+  Blob rather than local disk)
 
 `client/.env` can stay as-is for local dev (`VITE_API_URL=http://localhost:5000`).
 
@@ -131,23 +136,49 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ## How image uploads work
 
-- Photos are saved to `server/uploads/` on disk and served at
-  `http://localhost:5000/uploads/<filename>` via `express.static`
-- This is fine for local development, but **won't survive a deploy** on
-  most hosts (Render, Railway, etc. wipe the filesystem on redeploy unless
-  you pay for a persistent disk). For production, swap this out for a
-  proper file storage service (Cloudinary, S3, or similar) — the upload
-  route (`server/routes/upload.js`) is the only place that would need to
-  change
+- Photos are uploaded to **Vercel Blob** (public object storage), not saved
+  to local disk — this matters because a Vercel serverless function has no
+  persistent filesystem between requests, so local disk storage wouldn't
+  survive from one upload to the next request that tries to display it
+- Create a Blob store from your Vercel dashboard's **Storage** tab, copy the
+  token it gives you into `BLOB_READ_WRITE_TOKEN` — this same token works
+  both locally and in production, so there's only one storage path to
+  think about, not a "works differently in dev vs. prod" situation
 - Uploads are capped at 5MB and restricted to JPEG/PNG/WEBP/GIF
+- The upload route returns a real `https://...` URL directly from Blob —
+  the frontend just uses it as-is
+
+## Deploying — both pieces go on Vercel
+
+This is two separate Vercel projects from the same repo, since the client
+(static site) and server (API) deploy independently.
+
+1. **Create a Blob store first** — Vercel dashboard → Storage → Create →
+   Blob. Copy the token it gives you.
+2. **Deploy the server**: New Project → import this repo → set **Root
+   Directory** to `server`. Add environment variables: `DATABASE_URL`,
+   `JWT_SECRET`, `BLOB_READ_WRITE_TOKEN`, and `CLIENT_URL` (set to a
+   placeholder for now). Deploy, then copy the URL it gives you.
+3. **Deploy the client**: New Project → import this repo again → set
+   **Root Directory** to `client`. Add environment variable `VITE_API_URL`
+   set to the server URL from step 2. Deploy, then copy this URL too.
+4. **Go back to the server project's environment variables** and update
+   `CLIENT_URL` to the real client URL from step 3 — then redeploy the
+   server (Vercel → Deployments → ⋯ → Redeploy). This step matters: until
+   it's set correctly, CORS will block every request from the live site,
+   the same way it did locally before `CLIENT_URL` was configured.
+5. Visit your client's URL and test the full flow — signup, posting an
+   item with a real photo, requesting it from a second account, and chat.
+
+From here on, every `git push` to `main` automatically redeploys both
+projects.
 
 ## Known limitations / good next steps
 
-- Image uploads are local-disk only — see above, needs real storage before
-  a production deploy
 - No password reset flow
 - Chat updates via polling (checks for new messages every few seconds),
   not true real-time — fine at this scale, would want WebSockets or a
   service like Pusher/Ably for something snappier at larger scale
-- Styling is intentionally plain right now — happy to apply a real design
-  pass once the functionality feels solid
+- No pagination — fine for a small board, would need it at scale
+- No rate limiting on signup/login (a real production app would add this
+  to slow down brute-force attempts)
