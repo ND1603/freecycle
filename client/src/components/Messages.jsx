@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { markConversationSeen } from '../lib/unread';
 
 const MESSAGE_POLL_MS = 4000;
 const LIST_POLL_MS = 10000;
 
-export default function Messages({ initialConversationId, onClose }) {
+export default function Messages({ initialConversationId, onClose, onConversationsChange }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(initialConversationId || null);
-  const [thread, setThread] = useState(null); // { conversation, messages }
+  const [thread, setThread] = useState(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
   const bottomRef = useRef(null);
@@ -18,10 +19,11 @@ export default function Messages({ initialConversationId, onClose }) {
     try {
       const data = await api.getConversations();
       setConversations(data);
+      onConversationsChange?.(data);
     } catch (err) {
       setError(err.message);
     }
-  }, []);
+  }, [onConversationsChange]);
 
   const loadThread = useCallback(async (id) => {
     try {
@@ -43,8 +45,12 @@ export default function Messages({ initialConversationId, onClose }) {
       setThread(null);
       return;
     }
+    markConversationSeen(activeId);
     loadThread(activeId);
-    const t = setInterval(() => loadThread(activeId), MESSAGE_POLL_MS);
+    const t = setInterval(() => {
+      loadThread(activeId);
+      markConversationSeen(activeId);
+    }, MESSAGE_POLL_MS);
     return () => clearInterval(t);
   }, [activeId, loadThread]);
 
@@ -68,74 +74,66 @@ export default function Messages({ initialConversationId, onClose }) {
   const otherPerson = (c) => (c.donor_id === user.id ? c.claimant_name : c.donor_name);
 
   return (
-    <div style={{ border: '1px solid #ccc', borderRadius: '8px', marginBottom: '30px', display: 'flex', maxHeight: '420px' }}>
-      <div style={{ width: '220px', borderRight: '1px solid #eee', overflowY: 'auto', padding: '10px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <strong>Messages</strong>
-          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer' }}>✕</button>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="messages-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Messages</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </div>
-        {conversations.length === 0 && (
-          <p style={{ fontSize: '13px', color: '#888' }}>No conversations yet.</p>
-        )}
-        {conversations.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => setActiveId(c.id)}
-            style={{
-              padding: '8px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              background: activeId === c.id ? '#eef6ee' : 'transparent',
-              marginBottom: '4px',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: '13px' }}>{otherPerson(c)}</div>
-            <div style={{ fontSize: '12px', color: '#888' }}>{c.item_title}</div>
-          </div>
-        ))}
-      </div>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {!activeId ? (
-          <p style={{ padding: '16px', color: '#888' }}>Pick a conversation on the left.</p>
-        ) : !thread ? (
-          <p style={{ padding: '16px', color: '#888' }}>Loading...</p>
-        ) : (
-          <>
-            <div style={{ padding: '10px', borderBottom: '1px solid #eee', fontSize: '13px' }}>
-              <strong>{otherPerson(thread.conversation)}</strong> · {thread.conversation.item_title}
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {thread.messages.map((m) => (
-                <div
-                  key={m.id}
-                  style={{
-                    alignSelf: m.sender_id === user.id ? 'flex-end' : 'flex-start',
-                    background: m.sender_id === user.id ? '#3f6b4a' : '#f0f0f0',
-                    color: m.sender_id === user.id ? '#fff' : '#000',
-                    padding: '6px 10px',
-                    borderRadius: '8px',
-                    maxWidth: '75%',
-                    fontSize: '13px',
-                  }}
-                >
-                  {m.content}
+        <div className={`messages-body ${activeId ? 'messages-body-thread-active' : ''}`}>
+          <div className="conversation-list">
+            {conversations.length === 0 && (
+              <p className="messages-empty-note">No conversations yet.</p>
+            )}
+            {conversations.map((c) => (
+              <button
+                key={c.id}
+                className={`conversation-row ${activeId === c.id ? 'conversation-row-active' : ''}`}
+                onClick={() => setActiveId(c.id)}
+              >
+                <span className="conversation-row-text">
+                  <span className="conversation-row-title">{otherPerson(c)}</span>
+                  <span className="conversation-row-item">{c.item_title}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="thread-pane">
+            {!activeId ? (
+              <div className="thread-placeholder"><p>Pick a conversation on the left.</p></div>
+            ) : !thread ? (
+              <div className="thread-placeholder"><p>Loading...</p></div>
+            ) : (
+              <>
+                <div className="thread-pane-header">
+                  <button className="icon-btn thread-back" onClick={() => setActiveId(null)} aria-label="Back">←</button>
+                  <div>
+                    <strong>{otherPerson(thread.conversation)}</strong>
+                    <span className="thread-pane-subtitle"> · {thread.conversation.item_title}</span>
+                  </div>
                 </div>
-              ))}
-              <div ref={bottomRef} />
-            </div>
-            {error && <p style={{ color: 'red', padding: '0 10px' }}>{error}</p>}
-            <form onSubmit={handleSend} style={{ display: 'flex', gap: '6px', padding: '10px', borderTop: '1px solid #eee' }}>
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Write a message..."
-                style={{ flex: 1 }}
-              />
-              <button type="submit">Send</button>
-            </form>
-          </>
-        )}
+                <div className="thread-messages">
+                  {thread.messages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`thread-bubble ${m.sender_id === user.id ? 'thread-bubble-mine' : 'thread-bubble-theirs'}`}
+                    >
+                      <p>{m.content}</p>
+                    </div>
+                  ))}
+                  <div ref={bottomRef} />
+                </div>
+                {error && <p className="field-error thread-error">{error}</p>}
+                <form className="thread-composer" onSubmit={handleSend}>
+                  <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message..." />
+                  <button type="submit" className="btn btn-primary btn-sm">Send</button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -20,6 +20,16 @@ async function request(path, options = {}) {
   return data;
 }
 
+// Images uploaded to our own server come back as a relative path like
+// "/uploads/abc123.jpg" — this turns that into a full URL the browser
+// can actually load. External URLs (picsum, imgur, etc.) pass through
+// unchanged since they already start with http.
+export function resolveImageUrl(url) {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_URL}${url}`;
+}
+
 export const api = {
   signup: (name, email, password) =>
     request('/api/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
@@ -48,4 +58,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
+
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`${API_URL}/api/upload`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData, // no Content-Type header — browser sets the multipart boundary itself
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Upload failed.');
+    return data;
+  },
 };

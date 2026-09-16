@@ -31,13 +31,14 @@ router.get('/', requireAuth, async (req, res) => {
          donor.name AS donor_name,
          claimant.name AS claimant_name,
          lm.content AS last_message_content,
+         lm.sender_id AS last_message_sender_id,
          lm.created_at AS last_message_at
        FROM conversations c
        JOIN items ON items.id = c.item_id
        JOIN users donor ON donor.id = c.donor_id
        JOIN users claimant ON claimant.id = c.claimant_id
        LEFT JOIN LATERAL (
-         SELECT content, created_at FROM messages
+         SELECT content, sender_id, created_at FROM messages
          WHERE messages.conversation_id = c.id
          ORDER BY created_at DESC
          LIMIT 1

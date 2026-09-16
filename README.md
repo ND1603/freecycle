@@ -1,8 +1,21 @@
 # Freecycle
 
-A neighborhood donation board — post items, browse what's available, request
-items from other members, and chat with them about pickup. Built with
-React (client) + Express (server) + PostgreSQL (Neon).
+A neighborhood donation board — post items with a real photo, search and
+filter what's available, request items from other members, and chat about
+pickup. Built with React (client) + Express (server) + PostgreSQL (Neon).
+
+## What's here
+
+- **Auth** — signup/login with bcrypt-hashed passwords, sessions via an
+  HttpOnly JWT cookie
+- **Items** — post donations with a real uploaded photo (or a pasted image
+  URL), browse with search + category filters
+- **Claims** — request an item; the server blocks claiming your own item or
+  a double-claim, using a database transaction
+- **Chat** — requesting an item opens a real conversation thread, with an
+  unread-messages badge in the header
+- **Design** — a full visual pass (moss/ochre theme, modal-based forms, item
+  cards) instead of the plain functional version this started as
 
 ## Project structure
 
@@ -15,11 +28,14 @@ freecycle/
 │   │   ├── auth.js              signup, login, logout, session check
 │   │   ├── items.js             list + create items
 │   │   ├── claims.js            request an item (creates a conversation too)
-│   │   └── conversations.js     list conversations, read/send messages
+│   │   ├── conversations.js     list conversations, read/send messages
+│   │   └── upload.js            image upload (multer, saves to /uploads)
 │   ├── middleware/
 │   │   └── requireAuth.js       checks the login cookie
 │   ├── lib/
 │   │   └── auth.js              password hashing, JWT, cookies
+│   ├── uploads/                 uploaded item photos (gitignored — only
+│   │                             .gitkeep is tracked)
 │   ├── db/
 │   │   ├── schema.sql
 │   │   └── seed.sql             optional sample data
@@ -27,12 +43,16 @@ freecycle/
 └── client/                  React frontend (Vite)
     ├── src/
     │   ├── App.jsx
-    │   ├── api/client.js        fetch wrapper for the API
+    │   ├── App.css               design system (moss/ochre theme)
+    │   ├── api/client.js         fetch wrapper for the API
     │   ├── context/AuthContext.jsx
     │   └── components/
-    │       ├── AuthForm.jsx
-    │       ├── AddItemForm.jsx
-    │       ├── ClaimForm.jsx
+    │       ├── AuthModal.jsx
+    │       ├── PostItemModal.jsx
+    │       ├── ClaimModal.jsx
+    │       ├── ItemCard.jsx
+    │       ├── CategoryTag.jsx
+    │       ├── StatusStamp.jsx
     │       └── Messages.jsx
     └── .env.example
 ```
@@ -81,12 +101,16 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 ## 4. Try it out
 
 1. Create an account (or sign in with the demo login)
-2. Post an item with **Post an Item to Donate**
-3. Sign out, create a second account, and click **Request this item** on
-   something the first account posted
-4. Click into **Messages** to see the conversation that was created
-   automatically — reply as the donor by switching accounts (or use a
-   second browser / incognito window)
+2. Click **+ Donate an item**, upload a real photo (or paste an image URL),
+   and post it
+3. Try the search box and category sidebar to filter the board
+4. Sign out, create a second account, and click **Request item** on
+   something the first account posted — notice it's blocked if you try to
+   request your own item
+5. Click into **Messages** to see the conversation created automatically —
+   the header shows an unread badge when there's a new message waiting.
+   Reply as the donor by switching accounts (or use a second browser /
+   incognito window)
 
 ## How auth works
 
@@ -105,9 +129,22 @@ Open the URL Vite prints (usually `http://localhost:5173`).
   in production — both are required for the cookie to actually travel
   between them
 
+## How image uploads work
+
+- Photos are saved to `server/uploads/` on disk and served at
+  `http://localhost:5000/uploads/<filename>` via `express.static`
+- This is fine for local development, but **won't survive a deploy** on
+  most hosts (Render, Railway, etc. wipe the filesystem on redeploy unless
+  you pay for a persistent disk). For production, swap this out for a
+  proper file storage service (Cloudinary, S3, or similar) — the upload
+  route (`server/routes/upload.js`) is the only place that would need to
+  change
+- Uploads are capped at 5MB and restricted to JPEG/PNG/WEBP/GIF
+
 ## Known limitations / good next steps
 
-- No image upload — paste an image URL when posting, or leave blank
+- Image uploads are local-disk only — see above, needs real storage before
+  a production deploy
 - No password reset flow
 - Chat updates via polling (checks for new messages every few seconds),
   not true real-time — fine at this scale, would want WebSockets or a

@@ -1,103 +1,203 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { api } from './api/client';
 import { useAuth } from './context/AuthContext';
-import AuthForm from './components/AuthForm';
-import AddItemForm from './components/AddItemForm';
-import ClaimForm from './components/ClaimForm';
+import { CATEGORIES, CATEGORY_COLORS } from './data/constants';
+import { countUnread } from './lib/unread';
+import AuthModal from './components/AuthModal';
+import PostItemModal from './components/PostItemModal';
+import ClaimModal from './components/ClaimModal';
 import Messages from './components/Messages';
+import ItemCard from './components/ItemCard';
 import './App.css';
 
 function App() {
   const { user, checking, logout } = useAuth();
+
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [claimingId, setClaimingId] = useState(null);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
+
+  const [authOpen, setAuthOpen] = useState(false);
+  const [postOpen, setPostOpen] = useState(false);
+  const [claimItem, setClaimItem] = useState(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [messagesInitialId, setMessagesInitialId] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
+  const fetchItems = useCallback(() => {
+    setLoadingItems(true);
+    setLoadError('');
     api.getItems()
-      .then((data) => {
-        setItems(data);
-        setLoading(false);
-      })
-      .catch((err) => console.error(err));
+      .then(setItems)
+      .catch((err) => setLoadError(err.message))
+      .finally(() => setLoadingItems(false));
   }, []);
 
-  const handleItemAdded = (newItem) => {
-    setItems((prevItems) => [newItem, ...prevItems]);
-  };
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const handleClaimed = (itemId, conversationId) => {
+  // Keep the unread badge current even while the Messages panel is
+  // closed — Messages itself only polls while it's open/mounted.
+  useEffect(() => {
+    if (!user) return;
+    const check = () => {
+      api.getConversations()
+        .then((convos) => setUnreadCount(countUnread(convos, user.id)))
+        .catch(() => {});
+    };
+    check();
+    const t = setInterval(check, 15000);
+    return () => clearInterval(t);
+  }, [user]);
+
+  const filteredItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => {
+      const matchesCategory = activeCategory === 'All' || it.category === activeCategory;
+      const matchesQuery =
+        !q ||
+        it.title.toLowerCase().includes(q) ||
+        it.description.toLowerCase().includes(q) ||
+        it.location.toLowerCase().includes(q);
+      return matchesCategory && matchesQuery;
+    });
+  }, [items, query, activeCategory]);
+
+  const counts = useMemo(() => {
+    const c = { All: items.length };
+    CATEGORIES.forEach((cat) => { c[cat] = items.filter((i) => i.category === cat).length; });
+    return c;
+  }, [items]);
+
+  function openPostModal() {
+    if (!user) return setAuthOpen(true);
+    setPostOpen(true);
+  }
+
+  function openClaimModal(item) {
+    if (!user) return setAuthOpen(true);
+    setClaimItem(item);
+  }
+
+  function handleItemAdded(newItem) {
+    setItems((prev) => [newItem, ...prev]);
+    setPostOpen(false);
+  }
+
+  function handleClaimed(itemId, conversationId) {
     setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Claimed' } : it)));
-    setClaimingId(null);
+    setClaimItem(null);
     setMessagesInitialId(conversationId);
     setMessagesOpen(true);
-  };
+  }
+
+  function openMessages() {
+    setMessagesInitialId(null);
+    setMessagesOpen(true);
+  }
 
   return (
-    <div style={{ padding: '30px', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>♻️ Freecycle - Community Recycling</h1>
-        {!checking && user && (
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '14px' }}>
-            <button onClick={() => { setMessagesInitialId(null); setMessagesOpen(true); }}>
-              💬 Messages
-            </button>
-            <span>Signed in as <strong>{user.name}</strong></span>
-            <button onClick={logout}>Sign out</button>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-mark">♻️</span>
+          <div>
+            <h1>Freecycle</h1>
+            <p className="brand-tagline">A community board for things that still have use in them</p>
           </div>
-        )}
+        </div>
+
+        <div className="header-actions">
+          {!checking && user && (
+            <>
+              <button className="btn btn-ghost btn-with-badge" onClick={openMessages}>
+                💬 Messages
+                {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+              </button>
+              <span className="user-chip">
+                Signed in as <strong>{user.name}</strong>
+                <button className="icon-btn" onClick={logout} aria-label="Sign out" title="Sign out">↪</button>
+              </span>
+            </>
+          )}
+          {!checking && !user && (
+            <button className="btn btn-ghost" onClick={() => setAuthOpen(true)}>Sign in</button>
+          )}
+          <button className="btn btn-primary" onClick={openPostModal}>+ Donate an item</button>
+        </div>
+      </header>
+
+      <div className="toolbar">
+        <label className="search-field">
+          🔍
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by item or location"
+          />
+        </label>
       </div>
 
-      {!checking && !user && <AuthForm />}
+      <div className="layout">
+        <aside className="sidebar">
+          <h2 className="sidebar-heading">Browse by category</h2>
+          <nav className="category-list">
+            <button
+              className={`category-item ${activeCategory === 'All' ? 'category-item-active' : ''}`}
+              onClick={() => setActiveCategory('All')}
+            >
+              <span>All items</span>
+              <span className="category-count">{counts.All}</span>
+            </button>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                className={`category-item ${activeCategory === cat ? 'category-item-active' : ''}`}
+                onClick={() => setActiveCategory(cat)}
+              >
+                <span className="category-item-dot" style={{ '--tag-color': CATEGORY_COLORS[cat] }} />
+                <span>{cat}</span>
+                <span className="category-count">{counts[cat] || 0}</span>
+              </button>
+            ))}
+          </nav>
+          <button className="reset-link" onClick={fetchItems}>↻ Refresh listings</button>
+        </aside>
 
-      {!checking && user && <AddItemForm onItemAdded={handleItemAdded} />}
+        <main className="feed">
+          {loadingItems ? (
+            <div className="empty-state"><p>Loading listings...</p></div>
+          ) : loadError ? (
+            <div className="empty-state"><h3>Couldn't load the board</h3><p>{loadError}</p></div>
+          ) : filteredItems.length === 0 ? (
+            <div className="empty-state"><h3>No matches</h3><p>Try a different category or search.</p></div>
+          ) : (
+            <div className="item-grid">
+              {filteredItems.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  isOwn={user?.id === item.donor_id}
+                  onRequest={openClaimModal}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
 
+      {postOpen && <PostItemModal onClose={() => setPostOpen(false)} onItemAdded={handleItemAdded} />}
+      {claimItem && <ClaimModal item={claimItem} onClose={() => setClaimItem(null)} onClaimed={handleClaimed} />}
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       {messagesOpen && (
         <Messages
           initialConversationId={messagesInitialId}
           onClose={() => setMessagesOpen(false)}
+          onConversationsChange={(convos) => setUnreadCount(countUnread(convos, user?.id))}
         />
       )}
-
-      <hr style={{ margin: '20px 0' }} />
-
-      <h2>Available Donations</h2>
-
-      {loading && <p>Loading items...</p>}
-
-      <div style={{ display: 'grid', gap: '15px' }}>
-        {items.map((item) => {
-          const isOwn = user?.id === item.donor_id;
-          const isClaimable = item.status === 'Available' && !isOwn;
-          return (
-            <div key={item.id} style={{ border: '1px solid #ddd', padding: '15px', borderRadius: '8px' }}>
-              <h3>{item.title} {item.status === 'Claimed' && <span style={{ fontSize: '12px', color: '#999' }}>(Claimed)</span>}</h3>
-              <p>{item.description}</p>
-              <small>📍 {item.location} | 🏷️ {item.category} | Condition: {item.condition} | Posted by {item.donor_name}</small>
-
-              {user && isClaimable && claimingId !== item.id && (
-                <div style={{ marginTop: '10px' }}>
-                  <button onClick={() => setClaimingId(item.id)}>Request this item</button>
-                </div>
-              )}
-              {isOwn && <p style={{ fontSize: '12px', color: '#888', marginTop: '10px' }}>This is your donation</p>}
-              {!user && item.status === 'Available' && (
-                <p style={{ fontSize: '12px', color: '#888', marginTop: '10px' }}>Sign in to request this item</p>
-              )}
-
-              {claimingId === item.id && (
-                <ClaimForm
-                  item={item}
-                  onClose={() => setClaimingId(null)}
-                  onClaimed={handleClaimed}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
