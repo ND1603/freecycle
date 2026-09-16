@@ -15,6 +15,11 @@ const app = express();
 // browser to actually send/receive the auth cookie cross-origin between
 // the client and this server, whether that's localhost during dev or
 // two different Vercel URLs in production.
+
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Freecycle API is running' });
+});
+
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
