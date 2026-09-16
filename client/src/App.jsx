@@ -8,6 +8,7 @@ import PostItemModal from './components/PostItemModal';
 import ClaimModal from './components/ClaimModal';
 import Messages from './components/Messages';
 import ItemCard from './components/ItemCard';
+import ItemDetailModal from './components/ItemDetailModal';
 import './App.css';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [postOpen, setPostOpen] = useState(false);
   const [claimItem, setClaimItem] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [messagesInitialId, setMessagesInitialId] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -41,7 +43,6 @@ function App() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  // Keep the unread badge current even while the Messages panel is closed
   useEffect(() => {
     if (!user) return;
     const check = () => {
@@ -93,6 +94,7 @@ function App() {
   function handleClaimed(itemId, conversationId) {
     setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Claimed' } : it)));
     setClaimItem(null);
+    setSelectedItem(null);
     setMessagesInitialId(conversationId);
     setMessagesOpen(true);
   }
@@ -107,6 +109,7 @@ function App() {
     try {
       await api.deleteItem(itemId);
       setItems((prev) => prev.filter((it) => it.id !== itemId));
+      setSelectedItem(null);
     } catch (err) {
       alert(err.message || 'Failed to delete item.');
     }
@@ -116,6 +119,7 @@ function App() {
     try {
       await api.reopenItem(itemId);
       setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Available' } : it)));
+      setSelectedItem((prev) => (prev?.id === itemId ? { ...prev, status: 'Available' } : prev));
     } catch (err) {
       alert(err.message || 'Failed to reopen item.');
     }
@@ -152,7 +156,6 @@ function App() {
         </div>
       </header>
 
-      {/* Toolbar with Search and Filters */}
       <div className="toolbar" style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
         <label className="search-field" style={{ flex: 1, minWidth: '220px' }}>
           🔍
@@ -222,6 +225,7 @@ function App() {
                   key={item.id}
                   item={item}
                   isOwn={user?.id === item.donor_id}
+                  onSelect={setSelectedItem}
                   onRequest={openClaimModal}
                   onReopen={handleReopenItem}
                   onDelete={handleDeleteItem}
@@ -231,6 +235,17 @@ function App() {
           )}
         </main>
       </div>
+
+      {selectedItem && (
+        <ItemDetailModal
+          item={selectedItem}
+          isOwn={user?.id === selectedItem.donor_id}
+          onClose={() => setSelectedItem(null)}
+          onRequest={openClaimModal}
+          onReopen={handleReopenItem}
+          onDelete={handleDeleteItem}
+        />
+      )}
 
       {postOpen && <PostItemModal onClose={() => setPostOpen(false)} onItemAdded={handleItemAdded} />}
       {claimItem && <ClaimModal item={claimItem} onClose={() => setClaimItem(null)} onClaimed={handleClaimed} />}

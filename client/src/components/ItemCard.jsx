@@ -2,13 +2,19 @@ import StatusStamp from './StatusStamp';
 import CategoryTag from './CategoryTag';
 import { resolveImageUrl } from '../api/client';
 
-export default function ItemCard({ item, isOwn, onRequest, onReopen, onDelete }) {
+export default function ItemCard({ item, isOwn, onSelect, onRequest, onReopen, onDelete }) {
   const isAvailable = item.status === 'Available';
   const imageSrc = resolveImageUrl(item.image_url) || `https://picsum.photos/seed/${item.id}/500/375`;
+  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
 
   return (
     <article className="item-card">
-      <div className="item-card-media">
+      <div
+        className="item-card-media"
+        onClick={() => onSelect?.(item)}
+        style={{ cursor: 'pointer' }}
+        title="Click to view full photo and details"
+      >
         <img src={imageSrc} alt={item.title} loading="lazy" />
         <div className="item-card-stamp-wrap">
           <StatusStamp status={item.status} />
@@ -16,12 +22,29 @@ export default function ItemCard({ item, isOwn, onRequest, onReopen, onDelete })
       </div>
       <div className="item-card-body">
         <CategoryTag category={item.category} />
-        <h3 className="item-card-title">{item.title}</h3>
+        <h3
+          className="item-card-title"
+          onClick={() => onSelect?.(item)}
+          style={{ cursor: 'pointer' }}
+          title="Click to view details"
+        >
+          {item.title}
+        </h3>
         <p className="item-card-desc">{item.description}</p>
       </div>
       <div className="item-card-footer">
         <div className="item-card-meta">
-          <span className="meta-row">📍 {item.location}</span>
+          <a
+            href={mapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="meta-row"
+            style={{ color: 'inherit', textDecoration: 'none' }}
+            title="Open location in Google Maps"
+            onClick={(e) => e.stopPropagation()}
+          >
+            📍 {item.location} ↗
+          </a>
           <span className="meta-row meta-condition">{item.condition}</span>
         </div>
 
