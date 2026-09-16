@@ -8,6 +8,9 @@ async function loadConversation(id) {
   const { rows } = await db.query(
     `SELECT c.id, c.item_id, c.donor_id, c.claimant_id,
             items.title AS item_title,
+            items.image_url AS item_image_url,
+            items.status AS item_status,
+            items.location AS item_location,
             donor.name AS donor_name,
             claimant.name AS claimant_name
      FROM conversations c

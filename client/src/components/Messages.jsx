@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api } from '../api/client';
+import { api, resolveImageUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { markConversationSeen } from '../lib/unread';
+import StatusStamp from './StatusStamp';
 
 const MESSAGE_POLL_MS = 4000;
 const LIST_POLL_MS = 10000;
@@ -55,8 +56,8 @@ export default function Messages({ initialConversationId, onClose, onConversatio
   }, [activeId, loadThread]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView();
-  }, [thread]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [thread?.messages?.length]);
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -64,6 +65,16 @@ export default function Messages({ initialConversationId, onClose, onConversatio
     try {
       await api.sendMessage(activeId, draft.trim());
       setDraft('');
+      loadThread(activeId);
+      loadConversations();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleReopenFromChat = async (itemId) => {
+    try {
+      await api.reopenItem(itemId);
       loadThread(activeId);
       loadConversations();
     } catch (err) {
@@ -109,11 +120,49 @@ export default function Messages({ initialConversationId, onClose, onConversatio
               <>
                 <div className="thread-pane-header">
                   <button className="icon-btn thread-back" onClick={() => setActiveId(null)} aria-label="Back">←</button>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <strong>{otherPerson(thread.conversation)}</strong>
                     <span className="thread-pane-subtitle"> · {thread.conversation.item_title}</span>
                   </div>
                 </div>
+
+                {/* Item Context Banner */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '8px 16px',
+                  background: 'var(--bg)',
+                  borderBottom: '1px solid var(--line)',
+                  fontSize: '13px'
+                }}>
+                  <img
+                    src={resolveImageUrl(thread.conversation.item_image_url) || `https://picsum.photos/seed/${thread.conversation.item_id}/80/80`}
+                    alt=""
+                    style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {thread.conversation.item_title}
+                    </div>
+                    <div style={{ color: 'var(--ink-soft)', fontSize: '12px' }}>
+                      📍 {thread.conversation.item_location}
+                    </div>
+                  </div>
+                  <StatusStamp status={thread.conversation.item_status || 'Claimed'} />
+
+                  {user.id === thread.conversation.donor_id && thread.conversation.item_status !== 'Available' && (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: '11.5px', padding: '4px 8px' }}
+                      title="Make available if claimant cannot pick it up"
+                      onClick={() => handleReopenFromChat(thread.conversation.item_id)}
+                    >
+                      Reopen
+                    </button>
+                  )}
+                </div>
+
                 <div className="thread-messages">
                   {thread.messages.map((m) => (
                     <div
@@ -125,9 +174,26 @@ export default function Messages({ initialConversationId, onClose, onConversatio
                   ))}
                   <div ref={bottomRef} />
                 </div>
+
                 {error && <p className="field-error thread-error">{error}</p>}
+
+                {/* Quick helper buttons */}
+                <div style={{ padding: '4px 12px', display: 'flex', gap: '8px', borderTop: '1px solid var(--line)', background: 'var(--surface)' }}>
+                  <button
+                    type="button"
+                    style={{ background: 'none', border: 'none', color: 'var(--moss)', fontSize: '12px', cursor: 'pointer', padding: '4px 0' }}
+                    onClick={() => setDraft(`Hi! Are you still able to pick this up at ${thread.conversation.item_location}? What time works best?`)}
+                  >
+                    📍 Ask pickup time
+                  </button>
+                </div>
+
                 <form className="thread-composer" onSubmit={handleSend}>
-                  <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message..." />
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Write a message..."
+                  />
                   <button type="submit" className="btn btn-primary btn-sm">Send</button>
                 </form>
               </>
