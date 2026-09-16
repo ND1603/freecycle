@@ -13,6 +13,9 @@ import './App.css';
 function App() {
   const { user, checking, logout } = useAuth();
 
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
+  const [onlyMine, setOnlyMine] = useState(false);
+
   const [items, setItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -53,17 +56,19 @@ function App() {
   }, [user]);
 
   const filteredItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((it) => {
-      const matchesCategory = activeCategory === 'All' || it.category === activeCategory;
-      const matchesQuery =
-        !q ||
-        it.title.toLowerCase().includes(q) ||
-        it.description.toLowerCase().includes(q) ||
-        it.location.toLowerCase().includes(q);
-      return matchesCategory && matchesQuery;
-    });
-  }, [items, query, activeCategory]);
+  const q = query.trim().toLowerCase();
+  return items.filter((it) => {
+    if (onlyAvailable && it.status !== 'Available') return false;
+    if (onlyMine && it.donor_id !== user?.id) return false;
+    const matchesCategory = activeCategory === 'All' || it.category === activeCategory;
+    const matchesQuery =
+      !q ||
+      it.title.toLowerCase().includes(q) ||
+      it.description.toLowerCase().includes(q) ||
+      it.location.toLowerCase().includes(q);
+    return matchesCategory && matchesQuery;
+  });
+}, [items, query, activeCategory, onlyAvailable, onlyMine, user]);
 
   const counts = useMemo(() => {
     const c = { All: items.length };
@@ -97,6 +102,25 @@ function App() {
     setMessagesInitialId(null);
     setMessagesOpen(true);
   }
+
+  async function handleDeleteItem(itemId) {
+  if (!window.confirm('Are you sure you want to delete this listing?')) return;
+  try {
+    await api.deleteItem(itemId);
+    setItems((prev) => prev.filter((it) => it.id !== itemId));
+  } catch (err) {
+    alert(err.message || 'Failed to delete item.');
+  }
+}
+
+async function handleReopenItem(itemId) {
+  try {
+    await api.reopenItem(itemId);
+    setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Available' } : it)));
+  } catch (err) {
+    alert(err.message || 'Failed to reopen item.');
+  }
+}
 
   return (
     <div className="app-shell">
@@ -138,7 +162,50 @@ function App() {
             placeholder="Search by item or location"
           />
         </label>
-      </div>
+
+       <div className="toolbar" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+  <label className="search-field" style={{ flex: 1 }}>
+    🔍
+    <input
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Search by item or location"
+    />
+  </label>
+  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+    <input
+      type="checkbox"
+      checked={onlyAvailable}
+      onChange={(e) => setOnlyAvailable(e.target.checked)}
+    />
+    Available only
+  </label>
+  {user && (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+      <input
+        type="checkbox"
+        checked={onlyMine}
+        onChange={(e) => setOnlyMine(e.target.checked)}
+      />
+      My donations
+    </label>
+  )}
+</div> 
+
+
+       </div>
+
+  
+<ItemCard
+  key={item.id}
+  item={item}
+  isOwn={user?.id === item.donor_id}
+  onRequest={openClaimModal}
+  onReopen={handleReopenItem}
+  onDelete={handleDeleteItem}
+/>
+
+
 
       <div className="layout">
         <aside className="sidebar">

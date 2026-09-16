@@ -41,4 +41,51 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
+// DELETE /api/items/:id - Donor can delete their own item
+router.delete('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const itemResult = await db.query('SELECT donor_id FROM items WHERE id = $1', [id]);
+    const item = itemResult.rows[0];
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found.' });
+    }
+    if (item.donor_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only delete your own items.' });
+    }
+
+    await db.query('DELETE FROM items WHERE id = $1', [id]);
+    res.json({ ok: true, message: 'Item deleted.' });
+  } catch (err) {
+    console.error('❌ delete item error:', err.message);
+    res.status(500).json({ error: 'Could not delete item.' });
+  }
+});
+
+// PATCH /api/items/:id/reopen - Donor can cancel a claim and make it Available again
+router.patch('/:id/reopen', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const itemResult = await db.query('SELECT donor_id, status FROM items WHERE id = $1', [id]);
+    const item = itemResult.rows[0];
+
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found.' });
+    }
+    if (item.donor_id !== req.user.id) {
+      return res.status(403).json({ error: 'You can only manage your own items.' });
+    }
+
+    // Set back to Available and remove the claim
+    await db.query("UPDATE items SET status = 'Available' WHERE id = $1", [id]);
+    await db.query('DELETE FROM claims WHERE item_id = $1', [id]);
+
+    res.json({ ok: true, status: 'Available' });
+  } catch (err) {
+    console.error('❌ reopen item error:', err.message);
+    res.status(500).json({ error: 'Could not reopen item.' });
+  }
+});
+
 module.exports = router;

@@ -71,4 +71,9 @@ export const api = {
     if (!res.ok) throw new Error(data?.error || 'Upload failed.');
     return data;
   },
+
+    deleteItem: (id) => request(`/api/items/${id}`, { method: 'DELETE' }),
+
+  reopenItem: (id) => request(`/api/items/${id}/reopen`, { method: 'PATCH' }),
+
 };

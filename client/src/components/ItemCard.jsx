@@ -2,13 +2,8 @@ import StatusStamp from './StatusStamp';
 import CategoryTag from './CategoryTag';
 import { resolveImageUrl } from '../api/client';
 
-export default function ItemCard({ item, isOwn, onRequest }) {
-  const disabled = item.status !== 'Available' || isOwn;
-
-  let buttonLabel = 'Request item';
-  if (isOwn) buttonLabel = 'Your donation';
-  else if (item.status !== 'Available') buttonLabel = 'Already claimed';
-
+export default function ItemCard({ item, isOwn, onRequest, onReopen, onDelete }) {
+  const isAvailable = item.status === 'Available';
   const imageSrc = resolveImageUrl(item.image_url) || `https://picsum.photos/seed/${item.id}/500/375`;
 
   return (
@@ -29,13 +24,36 @@ export default function ItemCard({ item, isOwn, onRequest }) {
           <span className="meta-row">📍 {item.location}</span>
           <span className="meta-row meta-condition">{item.condition}</span>
         </div>
-        <button
-          className="btn btn-primary btn-sm"
-          disabled={disabled}
-          onClick={() => onRequest(item)}
-        >
-          {buttonLabel}
-        </button>
+
+        {isOwn ? (
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {!isAvailable && (
+              <button
+                className="btn btn-ghost btn-sm"
+                title="Make available if claimant flaked"
+                onClick={() => onReopen(item.id)}
+              >
+                Reopen
+              </button>
+            )}
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ color: '#c0392b', borderColor: '#e74c3c44' }}
+              onClick={() => onDelete(item.id)}
+              title="Delete this listing"
+            >
+              Delete
+            </button>
+          </div>
+        ) : (
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={!isAvailable}
+            onClick={() => onRequest(item)}
+          >
+            {isAvailable ? 'Request item' : 'Already claimed'}
+          </button>
+        )}
       </div>
     </article>
   );
