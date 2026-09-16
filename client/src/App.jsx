@@ -41,8 +41,7 @@ function App() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  // Keep the unread badge current even while the Messages panel is
-  // closed — Messages itself only polls while it's open/mounted.
+  // Keep the unread badge current even while the Messages panel is closed
   useEffect(() => {
     if (!user) return;
     const check = () => {
@@ -56,19 +55,19 @@ function App() {
   }, [user]);
 
   const filteredItems = useMemo(() => {
-  const q = query.trim().toLowerCase();
-  return items.filter((it) => {
-    if (onlyAvailable && it.status !== 'Available') return false;
-    if (onlyMine && it.donor_id !== user?.id) return false;
-    const matchesCategory = activeCategory === 'All' || it.category === activeCategory;
-    const matchesQuery =
-      !q ||
-      it.title.toLowerCase().includes(q) ||
-      it.description.toLowerCase().includes(q) ||
-      it.location.toLowerCase().includes(q);
-    return matchesCategory && matchesQuery;
-  });
-}, [items, query, activeCategory, onlyAvailable, onlyMine, user]);
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => {
+      if (onlyAvailable && it.status !== 'Available') return false;
+      if (onlyMine && it.donor_id !== user?.id) return false;
+      const matchesCategory = activeCategory === 'All' || it.category === activeCategory;
+      const matchesQuery =
+        !q ||
+        it.title.toLowerCase().includes(q) ||
+        it.description.toLowerCase().includes(q) ||
+        it.location.toLowerCase().includes(q);
+      return matchesCategory && matchesQuery;
+    });
+  }, [items, query, activeCategory, onlyAvailable, onlyMine, user]);
 
   const counts = useMemo(() => {
     const c = { All: items.length };
@@ -104,23 +103,23 @@ function App() {
   }
 
   async function handleDeleteItem(itemId) {
-  if (!window.confirm('Are you sure you want to delete this listing?')) return;
-  try {
-    await api.deleteItem(itemId);
-    setItems((prev) => prev.filter((it) => it.id !== itemId));
-  } catch (err) {
-    alert(err.message || 'Failed to delete item.');
+    if (!window.confirm('Are you sure you want to delete this listing?')) return;
+    try {
+      await api.deleteItem(itemId);
+      setItems((prev) => prev.filter((it) => it.id !== itemId));
+    } catch (err) {
+      alert(err.message || 'Failed to delete item.');
+    }
   }
-}
 
-async function handleReopenItem(itemId) {
-  try {
-    await api.reopenItem(itemId);
-    setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Available' } : it)));
-  } catch (err) {
-    alert(err.message || 'Failed to reopen item.');
+  async function handleReopenItem(itemId) {
+    try {
+      await api.reopenItem(itemId);
+      setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, status: 'Available' } : it)));
+    } catch (err) {
+      alert(err.message || 'Failed to reopen item.');
+    }
   }
-}
 
   return (
     <div className="app-shell">
@@ -153,8 +152,9 @@ async function handleReopenItem(itemId) {
         </div>
       </header>
 
-      <div className="toolbar">
-        <label className="search-field">
+      {/* Toolbar with Search and Filters */}
+      <div className="toolbar" style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <label className="search-field" style={{ flex: 1, minWidth: '220px' }}>
           🔍
           <input
             value={query}
@@ -162,50 +162,25 @@ async function handleReopenItem(itemId) {
             placeholder="Search by item or location"
           />
         </label>
-
-       <div className="toolbar" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-  <label className="search-field" style={{ flex: 1 }}>
-    🔍
-    <input
-      value={query}
-      onChange={(e) => setQuery(e.target.value)}
-      placeholder="Search by item or location"
-    />
-  </label>
-  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-    <input
-      type="checkbox"
-      checked={onlyAvailable}
-      onChange={(e) => setOnlyAvailable(e.target.checked)}
-    />
-    Available only
-  </label>
-  {user && (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-      <input
-        type="checkbox"
-        checked={onlyMine}
-        onChange={(e) => setOnlyMine(e.target.checked)}
-      />
-      My donations
-    </label>
-  )}
-</div> 
-
-
-       </div>
-
-  
-<ItemCard
-  key={item.id}
-  item={item}
-  isOwn={user?.id === item.donor_id}
-  onRequest={openClaimModal}
-  onReopen={handleReopenItem}
-  onDelete={handleDeleteItem}
-/>
-
-
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={onlyAvailable}
+            onChange={(e) => setOnlyAvailable(e.target.checked)}
+          />
+          Available only
+        </label>
+        {user && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13.5px', cursor: 'pointer', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={onlyMine}
+              onChange={(e) => setOnlyMine(e.target.checked)}
+            />
+            My donations
+          </label>
+        )}
+      </div>
 
       <div className="layout">
         <aside className="sidebar">
@@ -248,6 +223,8 @@ async function handleReopenItem(itemId) {
                   item={item}
                   isOwn={user?.id === item.donor_id}
                   onRequest={openClaimModal}
+                  onReopen={handleReopenItem}
+                  onDelete={handleDeleteItem}
                 />
               ))}
             </div>
